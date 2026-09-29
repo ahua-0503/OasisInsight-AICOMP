@@ -1,0 +1,74 @@
+{
+  "built_2016": {
+    "title": "Built-up",
+    "period": "2016",
+    "kind": "binary",
+    "crs": "EPSG:32645",
+    "source": "\u51b3\u8d5b\u6570\u636e\u548c\u56fe/\u51b3\u8d5bGIS\u6570\u636e/built 16-23/Built_2016.tif",
+    "zero_dem_preview_cells_masked": 0,
+    "shape": [
+      480,
+      366
+    ]
+  },
+  "ndvi_2023": {
+    "title": "NDVI",
+    "period": "2023",
+    "kind": "ndvi",
+    "crs": "EPSG:32645",
+    "source": "temperature rain DEM light/NDVI/NDVI_2023_Clip.tif",
+    "zero_dem_preview_cells_masked": 0,
+    "shape": [
+      480,
+      366
+    ]
+  },
+  "ntl_mean": {
+    "title": "Nighttime Light",
+    "period": "2016\u20132023 mean",
+    "kind": "ntl",
+    "crs": "EPSG:32645",
+    "source": "\u51b3\u8d5b\u6570\u636e\u548c\u56fe/\u51b3\u8d5bGIS\u6570\u636e/NTL_mean_16_23.tif",
+    "zero_dem_preview_cells_masked": 0,
+    "shape": [
+      480,
+      367
+    ]
+  },
+  "dem": {
+    "title": "DEM",
+    "period": "Static terrain",
+    "kind": "dem",
+    "crs": "EPSG:4326",
+    "source": "\u51b3\u8d5b\u6570\u636e\u548c\u56fe/\u51b3\u8d5bGIS\u6570\u636e/Urumqi_SRTM_30m_DEM.tif",
+    "zero_dem_preview_cells_masked": 12,
+    "shape": [
+      480,
+      503
+    ]
+  },
+  "trajectory": {
+    "title": "Urbanization trajectory",
+    "period": "2016\u20132023",
+    "kind": "trajectory",
+    "crs": "EPSG:32645",
+    "source": "spatial_cv/step7/formal_urbtype_v1/UrbType_formal_v1.tif",
+    "zero_dem_preview_cells_masked": 0,
+    "shape": [
+      480,
+      366
+    ]
+  },
+  "governance": {
+    "title": "Governance zoning",
+    "period": "2016\u20132023",
+    "kind": "governance",
+    "crs": "EPSG:32645",
+    "source": "spatial_cv/step9_governance/Governance_zoning_v2.tif",
+    "zero_dem_preview_cells_masked": 0,
+    "shape": [
+      480,
+      366
+    ]
+  }
+}

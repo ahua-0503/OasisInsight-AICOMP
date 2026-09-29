@@ -1,0 +1,6 @@
+﻿Zone_ID,Governance_zone_CN,Governance_zone_EN,Urban_condition,NDVI_condition,Pixel_count,Area_km2,Percentage_valid_area,Management_priority
+1,城市扩张风险管控区,Urban expansion risk-control zone,New persistent expansion,Degraded,935448,93.54480000000001,0.7313380914621995,优先核查新增建设与退化重叠区，减少新增植被损失并开展现场评估
+2,存量建成区绿化提升区,Existing built-up greening enhancement zone,Persistent built-up,Degraded,1181278,118.12780000000001,0.9235292587148449,核查建成区绿化退化原因，优先维护既有绿地
+3,城市植被维持改善区,Urban vegetation maintenance and improvement zone,Persistent built-up or New persistent expansion,Stable or Improved,6558558,655.8558,5.127514613815135,维持现有城市植被并监测后续变化
+4,生态保育区,Ecological conservation zone,Non-built background,Stable or Improved,91980020,9198.002,71.91045603759369,维护稳定或改善的非建成生态背景并持续监测
+5,生态修复优先区,Ecological restoration priority zone,Non-built background,Degraded,27253800,2725.38,21.307161998414124,优先核查退化原因与修复可行性，不直接等同荒漠边缘

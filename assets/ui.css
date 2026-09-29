@@ -1,0 +1,23 @@
+:root{--forest:#203c34;--line:#e2e7e3;--muted:#66736d}
+div[data-testid="stCaptionContainer"]{color:#55635c;font-size:13px}
+div[data-testid="stToolbar"]{visibility:hidden}
+.stApp{background:#fafbf9;color:var(--forest)}
+.block-container{max-width:1520px;padding:1.8rem 2.5rem 2rem}
+header[data-testid="stHeader"]{background:transparent}
+h1,h2,h3{color:var(--forest);letter-spacing:-.025em}h3{font-size:1.35rem!important;padding-top:.3rem!important}
+.brand{display:flex;align-items:center;gap:14px;padding:0 0 18px;border-bottom:1px solid var(--line);margin-bottom:12px}
+.brand img{width:48px;height:48px;object-fit:contain;border-radius:50%}.brand strong{font-size:25px;letter-spacing:-1px}.brand small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.badge{margin-left:auto;background:#DFF2E7;border:1px solid #c9ddcf;border-radius:6px;padding:6px 10px;font-size:12px;white-space:nowrap}
+.stTabs [data-baseweb="tab-list"]{gap:8px;border-bottom:1px solid var(--line)}
+.stTabs [data-baseweb="tab"]{padding:9px 16px;font-size:14px;border-radius:6px 6px 0 0;height:44px}
+.stTabs [aria-selected="true"]{color:var(--forest)!important;background:#DFF2E7}
+.stTabs [data-baseweb="tab-highlight"]{background:var(--forest)}
+div[data-testid="stMetric"]{background:white;border:1px solid var(--line);border-radius:8px;padding:14px 18px;border-top:3px solid #79CB9B}
+div[data-testid="stMetricValue"]{font-size:26px;white-space:normal}div[data-testid="stMetricLabel"] p{color:var(--muted);font-size:12px;white-space:normal}
+div[data-testid="stPlotlyChart"]{background:white;border:1px solid var(--line);border-radius:8px;padding:4px}
+div[data-baseweb="select"]>div{background:white;border-color:var(--line);border-radius:6px}
+.streamlit-expanderHeader{background:white;border-radius:6px}
+.finding{background:#DFF2E7;border-left:3px solid #79CB9B;border-radius:6px;padding:13px 18px;margin:12px 0}
+.finding small{font-size:10px;letter-spacing:.12em;font-weight:700}.finding p{font-size:15px;margin:4px 0 0}
+.footer{border-top:1px solid var(--line);padding-top:15px;margin-top:20px;color:var(--muted);font-size:12px}.footer small{font-size:10px}
+@media(max-width:900px){.block-container{padding:1.5rem 1rem}.brand{flex-wrap:wrap}.brand .badge{margin-left:0}.stTabs [data-baseweb="tab"]{padding:8px;font-size:12px}}

@@ -1,0 +1,47 @@
+[
+  {
+    "trajectory": 1,
+    "response": "Degraded",
+    "zone": 2
+  },
+  {
+    "trajectory": 1,
+    "response": "Stable",
+    "zone": 3
+  },
+  {
+    "trajectory": 1,
+    "response": "Improved",
+    "zone": 3
+  },
+  {
+    "trajectory": 2,
+    "response": "Degraded",
+    "zone": 1
+  },
+  {
+    "trajectory": 2,
+    "response": "Stable",
+    "zone": 3
+  },
+  {
+    "trajectory": 2,
+    "response": "Improved",
+    "zone": 3
+  },
+  {
+    "trajectory": 3,
+    "response": "Degraded",
+    "zone": 5
+  },
+  {
+    "trajectory": 3,
+    "response": "Stable",
+    "zone": 4
+  },
+  {
+    "trajectory": 3,
+    "response": "Improved",
+    "zone": 4
+  }
+]
