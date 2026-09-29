@@ -5,6 +5,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from utils.data import P,TRAJECTORIES,ZONES,COLORS,table,layers,grid,diagnose
+from utils.media import evidence_image
 
 st.set_page_config(page_title='OasisInsight | Ecological diagnosis',page_icon='🌿',layout='wide')
 from utils.style import header,finding,footer,about
@@ -144,11 +145,11 @@ with tabs[2]:
    st.dataframe(imp,use_container_width=True,hide_index=True)
    st.dataframe(shap,use_container_width=True,hide_index=True)
   with st.expander('View original SHAP summary figure'):
-   st.image(str(P/'assets/shap.png'),use_column_width=True)
+   evidence_image(P/'assets/shap.png')
  with robust:
   evidence=st.selectbox('Evidence',['Residual diagnostics','Sen–MK verification','Matched event-time comparison'])
   file={'Residual diagnostics':'residual.png','Sen–MK verification':'sen_mk.png','Matched event-time comparison':'event_time.png'}[evidence]
-  st.image(str(P/'assets'/file),use_column_width=True)
+  evidence_image(P/'assets'/file)
   st.caption('Reused formal analyses. Matched event-time contrasts are supportive observational evidence, not identified causal effects.')
 with tabs[3]:
  st.subheader('From ecological evidence to management priorities')
@@ -174,7 +175,7 @@ with tabs[3]:
   st.metric('Total area assigned to this governance zone',f'{zr.Area_km2:,.2f} km²',delta=None)
   st.caption(f'{zr.Percentage_valid_area:.2f}% of valid assigned area; not the area of the selected scenario alone.')
  with st.expander('Formal map and exact area statistics'):
-  st.image(str(P/'assets/governance_formal.png'),use_column_width=True)
+  evidence_image(P/'assets/governance_formal.png')
   st.dataframe(zone_stats[['Governance_zone_EN','Area_km2','Percentage_valid_area']],use_container_width=True,hide_index=True)
  st.download_button('Download governance statistics',zone_stats.to_csv(index=False).encode('utf-8-sig'),'governance_statistics.csv','text/csv')
 footer()
