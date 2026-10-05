@@ -1,185 +1,258 @@
 from pathlib import Path
+import hashlib
+import io
 import json
-import numpy as np
+import runpy
+import uuid
+import zipfile
+from datetime import datetime, timezone
 import pandas as pd
-import plotly.graph_objects as go
 import streamlit as st
-from utils.data import P,TRAJECTORIES,ZONES,COLORS,table,layers,grid,diagnose
-from utils.media import evidence_image
+from validation import validate, read_upload, template
+from utils.style import header, footer, about
+from basic_analysis import analyze
+import plotly.express as px
+import plotly.graph_objects as go
+from pyproj import Transformer
+from boundary import validate_boundary, rings
 
-st.set_page_config(page_title='OasisInsight | Ecological diagnosis',page_icon='🌿',layout='wide')
-from utils.style import header,finding,footer,about
-header()
-metadata=layers();stats=table('trajectory_stats.csv');bench=table('benchmark.csv');validation=table('validation.csv');zone_stats=table('zone_stats.csv')
-@st.cache_data
-def cached_grid(key):return grid(key)
-def base(fig,height=340):
- fig.update_layout(template='plotly_white',height=height,font=dict(family='Arial',size=13,color='#263c34'),margin=dict(l=25,r=25,t=20,b=25),paper_bgcolor='white',plot_bgcolor='white')
- return fig
-def mapfig(key,selected=None):
- g=cached_grid(key);z=g['z'].copy();m=metadata[key];kind=m['kind']
- if selected is not None:z[z!=selected]=np.nan
- discrete={'trajectory':(['#898988','#FFC48A','#79CB9B','#A369B0','#DBE6F7','#E6E6E6'],['Persistent built-up','New expansion','Non-built','Uncertain','Missing annual','Missing confirmation']), 'governance':(list(COLORS.values()),list(ZONES.values()))}
- opts={};scale=None
- if kind in discrete:
-  colors,names=discrete[kind];n=len(colors);scale=[]
-  for i,c in enumerate(colors):scale.extend([(i/n,c),((i+1)/n,c)])
-  opts=dict(zmin=.5,zmax=n+.5,colorbar=dict(tickvals=list(range(1,n+1)),ticktext=names,len=.7,thickness=10))
- elif kind=='binary':scale=[[0,'#E6E6E6'],[.5,'#E6E6E6'],[.5,'#547AC0'],[1,'#547AC0']];opts=dict(zmin=0,zmax=1,colorbar=dict(tickvals=[0,1],ticktext=['Non-built','Built-up'],thickness=10))
- elif kind=='ndvi':scale=[[0,'#E6E6E6'],[.4,'#DFF2E7'],[1,'#79CB9B']];opts=dict(zmin=-.2,zmax=.6,colorbar=dict(title='NDVI',thickness=10))
- elif kind=='ntl':scale=[[0,'#E6E6E6'],[.5,'#DBE6F7'],[1,'#547AC0']];opts=dict(colorbar=dict(title='NTL',thickness=10))
- else:scale=[[0,'#DFF2E7'],[.5,'#FFC48A'],[1,'#898988']];opts=dict(colorbar=dict(title='Elevation / m',thickness=10))
- isgeo=m['crs']=='EPSG:4326';factor=1 if isgeo else 1000
- fig=go.Figure(go.Heatmap(z=z,x=g['x']/factor,y=g['y']/factor,colorscale=scale,hoverongaps=False,hovertemplate='x: %{x:.3f}<br>y: %{y:.3f}<br>Value: %{z:.3f}<extra></extra>',**opts))
- if kind in discrete or kind=='binary':
-  fig.update_traces(showscale=False)
-  if kind=='binary':colors,names=['#E6E6E6','#547AC0'],['Non-built','Built-up']
-  else:colors,names=discrete[kind]
-  for i,(color,name) in enumerate(zip(colors,names),1):
-   if selected is not None and i!=selected:continue
-   fig.add_trace(go.Scatter(x=[None],y=[None],mode='markers',marker=dict(color=color,size=9,symbol='square'),name=name))
-  fig.update_layout(legend=dict(orientation='h',y=-.26,font=dict(size=11)))
- base(fig,440);fig.update_layout(margin=dict(l=25,r=25,t=20,b=100));fig.update_xaxes(title='Longitude / °E' if isgeo else 'Easting / km',showgrid=False);fig.update_yaxes(title='Latitude / °N' if isgeo else 'Northing / km',showgrid=False,scaleanchor='x',scaleratio=float(1/np.cos(np.deg2rad(np.mean(g['y'])))) if isgeo else 1)
- if selected is not None:
-  boundary=json.loads((P/'data/study_boundary_utm.json').read_text(encoding='utf-8'))
-  for i,ring in enumerate(boundary['rings']):
-   fig.add_trace(go.Scatter(x=ring['x'],y=ring['y'],mode='lines',line=dict(color='#898988',width=1.2),name='Study boundary',showlegend=i==0,hoverinfo='skip'))
-  fig.add_trace(go.Heatmap(z=np.where(np.isfinite(g['z']),1,np.nan),x=g['x']/1000,y=g['y']/1000,colorscale=[[0,'#E6E6E6'],[1,'#E6E6E6']],opacity=.35,showscale=False,hoverinfo='skip'))
-  fig.data=(fig.data[-1],)+fig.data[:-1]
-  fig.update_layout(showlegend=True)
- return fig
-tabs=st.tabs(['Overview','Trajectory Diagnosis','Trustworthy AI','Governance'])
-with tabs[0]:
- st.subheader('Urban Expansion in a Dryland Oasis City')
- st.caption('Multi-source observations · Trajectory-aware ecological diagnosis')
- cards=st.columns(3)
- for col,(code,label) in zip(cards,TRAJECTORIES.items()):
-  r=stats[stats.code==code].iloc[0];col.metric(label,f'{r.area_km2:,.1f} km²')
- left,right=st.columns([2.5,1])
- with right:
-  st.markdown('### Data Layers')
-  layer_name=st.selectbox('Data layer',['Built-up','NDVI','Nighttime Light','DEM'])
-  layer=dict(zip(['Built-up','NDVI','Nighttime Light','DEM'],['built_2016','ndvi_2023','ntl_mean','dem']))[layer_name]
-  st.caption(metadata[layer]['title']+' · '+metadata[layer]['period'])
-  st.markdown('Explore the spatial context of urban growth and vegetation change.')
-  st.caption('Scroll to zoom · Hover to inspect · Double-click to reset')
- with left:st.plotly_chart(mapfig(layer),use_container_width=True,config=dict(displayModeBar=False,scrollZoom=True))
- finding(f"{stats[stats.code==2].iloc[0].area_km2:,.1f} km² of persistent urban expansion was identified during 2016–2023.")
- st.caption('Display grids are reduced for speed; areas use full-resolution formal statistics. Uncertain and missing trajectories are excluded from the three main categories.')
- if layer=='dem':st.caption('DEM zero-valued cells are masked pending terrain-quality review.')
- about()
-with tabs[1]:
- st.subheader('Urban development, ecological response')
- st.caption('Innovation 1 · Trajectory-aware representation')
- with st.columns([1,1.5])[0]:
-  chosen=st.selectbox('Urbanization trajectory',list(TRAJECTORIES.values()),key='trajectory')
- u=next(k for k,v in TRAJECTORIES.items() if v==chosen)
- r=stats[stats.code==u].iloc[0]
- left,right=st.columns([1.3,1])
- with left:st.plotly_chart(mapfig('trajectory',u),use_container_width=True,config=dict(displayModeBar=False,scrollZoom=True))
- with right:
-  st.markdown('### Vegetation response')
-  values=[r.decrease_pct,r.stable_pct,r.increase_pct]
-  fig=go.Figure(go.Bar(x=['Degraded','Stable','Improved'],y=values,marker_color=['#FFC48A','#898988','#79CB9B'],text=[f'{v:.1f}%' for v in values],textposition='outside'))
-  base(fig);fig.update_yaxes(title='Valid NDVI area / %',range=[0,100]);st.plotly_chart(fig,use_container_width=True,config=dict(displayModeBar=False,scrollZoom=True))
-  st.metric('Trajectory area',f'{r.area_km2:,.2f} km²')
-  st.caption(f'Response denominator: {int(r.NDVI_valid_pixels):,} valid 10 m pixels; {int(r.NDVI_missing_pixels):,} NDVI-missing pixels excluded. This is an area statistic, not the RF sample distribution.')
- finding({1:f'{r.increase_pct:.1f}% of valid NDVI area in persistent built-up areas showed vegetation improvement.',2:f'{r.decrease_pct:.1f}% of valid NDVI area in new persistent expansion showed vegetation degradation.',3:f'{r.stable_pct:.1f}% of valid NDVI area in the non-built background remained stable.'}[u])
-with tabs[2]:
- st.subheader('Performance with Explicit Generalization Limits')
- st.caption('Innovation 2 · Spatially trustworthy AI')
- perf,explain,robust=st.tabs(['Model Performance','Explainability','Robustness'])
- with perf:
-  rf=bench[bench.Model=='Random Forest'].iloc[0];ridge=bench[bench.Model=='Ridge'].iloc[0]
-  random_r2=validation[(validation.Scope=='All area')&(validation.Validation=='Random 5-fold')].iloc[0].R2
-  cards=st.columns(3)
-  cards[0].metric('RF Spatial OOF R²',f'{rf.OOF_R2:.3f}')
-  cards[1].metric('RF vs Ridge ΔR²',f'{rf.OOF_R2-ridge.OOF_R2:+.3f}')
-  cards[2].metric('Random CV − Spatial 20 km ΔR²',f'{random_r2-rf.OOF_R2:.3f}')
-  left,right=st.columns(2)
-  with left:
-   st.markdown('### Model benchmark')
-   model=st.selectbox('Benchmark model',bench.Model.tolist(),index=bench.Model.tolist().index('Random Forest'))
-   row=bench[bench.Model==model].iloc[0]
-   c=st.columns(3)
-   for col,label,val in zip(c,['OOF R²','RMSE','MAE'],[row.OOF_R2,row.OOF_RMSE,row.OOF_MAE]):col.metric(label,f'{val:.4f}')
-   fig=go.Figure(go.Bar(x=bench.Model,y=bench.OOF_R2,marker_color=['#547AC0' if x==model else '#DBE6F7' for x in bench.Model]));base(fig,260);fig.update_yaxes(title='Pooled OOF R²');st.plotly_chart(fig,use_container_width=True,config=dict(displayModeBar=False,scrollZoom=True))
-   st.caption('Same 12,596 samples and 20-km spatial folds; fixed configurations. RF is retained among these four tested models, not claimed to be universally best.')
-   rf=bench[bench.Model=='Random Forest'].iloc[0];ridge=bench[bench.Model=='Ridge'].iloc[0]
-   st.info(f'RF vs Ridge: RMSE {(1-rf.OOF_RMSE/ridge.OOF_RMSE)*100:.1f}% lower · MAE {(1-rf.OOF_MAE/ridge.OOF_MAE)*100:.1f}% lower')
-  with right:
-   st.markdown('### Spatial generalization')
-   strategy=st.selectbox('Validation strategy',validation.Validation.unique().tolist(),index=2)
-   selected=validation[(validation.Scope=='All area')&(validation.Validation==strategy)].iloc[0];st.metric('All-area OOF R²',f'{selected.R2:.4f}')
-   fig=go.Figure()
-   for (scope,d),color in zip(validation.groupby('Scope',sort=False),['#547AC0','#898988','#FFC48A','#79CB9B']):
-    fig.add_trace(go.Scatter(x=d.Validation,y=d.R2,name=scope,mode='lines+markers',marker=dict(size=[11 if x==strategy else 5 for x in d.Validation]),line=dict(color=color)))
-   base(fig,315);fig.update_layout(legend=dict(orientation='h',y=-.35));fig.update_yaxes(title='Pooled OOF R²',zeroline=True);st.plotly_chart(fig,use_container_width=True,config=dict(displayModeBar=False,scrollZoom=True))
-   st.caption('20 km is the main scale; 10/40 km are sensitivity analyses. No buffer: block separation does not guarantee spatial independence. Negative R² is retained.')
- with explain:
-  st.caption('These are global predictive associations, not causal explanations or point-specific drivers.')
-  imp=table('permutation.csv').sort_values('mean')
-  shap=table('shap.csv').sort_values('mean_abs_SHAP')
-  left,right=st.columns(2)
-  with left:
-   st.markdown('### Global Importance')
-   st.caption('Permutation importance · predictive performance sensitivity')
-   fig=go.Figure(go.Bar(x=imp['mean'],y=imp.feature,orientation='h',marker_color='#547AC0'));base(fig,300);fig.update_xaxes(title='Permutation importance')
-   st.plotly_chart(fig,use_container_width=True,config=dict(displayModeBar=False))
-  with right:
-   st.markdown('### SHAP Summary')
-   st.caption('Global mean absolute SHAP · contribution magnitude')
-   fig=go.Figure(go.Bar(x=shap.mean_abs_SHAP,y=shap.feature,orientation='h',marker_color='#A369B0'));base(fig,300);fig.update_xaxes(title='Mean |SHAP value|')
-   st.plotly_chart(fig,use_container_width=True,config=dict(displayModeBar=False))
-  finding('Top predictive drivers by permutation importance: '+', '.join(imp.sort_values('mean',ascending=False).feature.head(3))+'.')
-  with st.columns([1,2])[0]:
-   feature=st.selectbox('Feature Response',['NDVIbase','Slope','DEM','Temperature'])
-  field={'Temperature':'TEMmean'}.get(feature,feature)
-  response_data=table('feature_response.csv')
-  d=response_data[response_data.feature==field].sort_values('x_mean')
-  fig=go.Figure(go.Scatter(x=d.x_mean,y=d.shap_mean,mode='lines+markers',line=dict(color='#547AC0'),customdata=d.n,hovertemplate='Feature: %{x:.4f}<br>Mean SHAP: %{y:.5f}<br>Bin samples: %{customdata}<extra></extra>'))
-  base(fig,260);fig.update_xaxes(title=feature);fig.update_yaxes(title='Mean SHAP value',zeroline=True)
-  st.plotly_chart(fig,use_container_width=True,config=dict(displayModeBar=False))
-  st.caption('Binned means from the saved formal SHAP analysis; each point summarizes observations within a feature bin. This is not a causal response curve.')
-  with st.expander('View detailed feature statistics'):
-   st.dataframe(imp,use_container_width=True,hide_index=True)
-   st.dataframe(shap,use_container_width=True,hide_index=True)
-  with st.expander('View original SHAP summary figure'):
-   evidence_image(P/'assets/shap.png')
- with robust:
-  evidence=st.selectbox('Evidence',['Residual diagnostics','Sen–MK verification','Matched event-time comparison'])
-  file={'Residual diagnostics':'residual.png','Sen–MK verification':'sen_mk.png','Matched event-time comparison':'event_time.png'}[evidence]
-  evidence_image(P/'assets'/file)
-  st.caption('Reused formal analyses. Matched event-time contrasts are supportive observational evidence, not identified causal effects.')
-with tabs[3]:
- st.subheader('From ecological evidence to management priorities')
- st.caption('Innovation 3 · Multi-evidence diagnosis and governance zoning')
- left,right=st.columns([1.5,1])
- with left:
-  st.plotly_chart(mapfig('governance'),use_container_width=True,config=dict(displayModeBar=False,scrollZoom=True))
-  st.caption('Excluded and missing-data areas are blank. Zoomed map uses display resampling; exact zone areas are shown below.')
- with right:
-  st.markdown('### Diagnosis Report')
-  st.caption('SELECTED CONDITION')
-  chosen_g=st.selectbox('Trajectory',list(TRAJECTORIES.values()),key='governance_trajectory')
-  gu=next(k for k,v in TRAJECTORIES.items() if v==chosen_g)
-  response=st.selectbox('Vegetation response',['Degraded','Stable','Improved'])
-  zone,name,priority=diagnose(gu,response)
-  st.markdown('**Ecological diagnosis**');st.write(f'{response} vegetation in {TRAJECTORIES[gu].lower()} areas.')
-  st.markdown('**Governance Priority**');st.success(name)
-  st.markdown('**Recommended Actions**')
-  for action in priority.split('. '):
-   if action.strip():st.markdown('- '+action.rstrip('.')+'.')
-  st.caption('Rule-based screening recommendation for field review. The selected scenario is not a location-specific diagnosis or a validated management outcome.')
-  zr=zone_stats[zone_stats.Zone_ID==zone].iloc[0]
-  st.metric('Total area assigned to this governance zone',f'{zr.Area_km2:,.2f} km²',delta=None)
-  st.caption(f'{zr.Percentage_valid_area:.2f}% of valid assigned area; not the area of the selected scenario alone.')
- with st.expander('Formal map and exact area statistics'):
-  evidence_image(P/'assets/governance_formal.png')
-  st.dataframe(zone_stats[['Governance_zone_EN','Area_km2','Percentage_valid_area']],use_container_width=True,hide_index=True)
- st.download_button('Download governance statistics',zone_stats.to_csv(index=False).encode('utf-8-sig'),'governance_statistics.csv','text/csv')
-footer()
+ROOT=Path(__file__).resolve().parent
+st.set_page_config(page_title='OasisInsight | Projects',page_icon='🌿',layout='wide')
+st.session_state.setdefault('route','Product')
+st.session_state.setdefault('projects',{})
+def set_route(route):
+    st.session_state.route=route
 
+def navigate(route):
+    st.session_state.route=route
+    st.rerun()
 
+def result_workspace(project):
+    st.title(project['name'])
+    st.caption(f"{project['area']} · {project['start']}–{project['end']} · Basic analysis complete")
+    result=project['result']; summary=project['summary']
+    a,b,c=st.columns(3)
+    a.metric('Observations',len(result)); b.metric('Mean dNDVI',f'{result.dNDVI.mean():.4f}'); c.metric('Confirmed expansion',int((result.Trajectory=='New persistent expansion').sum()))
+    tabs=st.tabs(['Overview','Trajectory & Response','Export'])
+    with tabs[0]:
+        fig=px.scatter(result,x='X',y='Y',color='Trajectory',hover_data=['ID','dNDVI'],color_discrete_sequence=['#898988','#79CB9B','#FFC48A','#547AC0','#A369B0'])
+        if project.get('boundary'):
+            transform=Transformer.from_crs(4326,project['crs'],always_xy=True)
+            for ring in rings(project['boundary']):
+                xs,ys=transform.transform(*zip(*[(p[0],p[1]) for p in ring]))
+                fig.add_trace(go.Scatter(x=list(xs),y=list(ys),mode='lines',line=dict(color='#898988',width=2),name='Study boundary',showlegend=False,hoverinfo='skip'))
+        fig.update_yaxes(scaleanchor='x',scaleratio=1)
+        st.plotly_chart(fig,use_container_width=True)
+        st.caption('Spatial observations in the supplied CRS: '+project['crs'])
+        if project.get('boundary_audit'):
+            st.caption(f"Boundary alignment: {project['boundary_audit']['points_inside']:,} observations inside; {project['boundary_audit']['points_outside']:,} outside. Boundary is supplied WGS84 GeoJSON.")
+    with tabs[1]:
+        st.plotly_chart(px.bar(summary,x='Trajectory',y='Count',color='Response',color_discrete_sequence=['#898988','#79CB9B','#FFC48A','#547AC0','#A369B0']),use_container_width=True)
+        st.dataframe(summary,hide_index=True,use_container_width=True)
+    with tabs[2]:
+        archive=io.BytesIO()
+        config={k:v for k,v in project.items() if k not in ['result','summary']}
+        with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
+            z.writestr('trajectory_vegetation_results.csv',result.to_csv(index=False))
+            z.writestr('response_statistics.csv',summary.to_csv(index=False))
+            z.writestr('analysis_record.json',json.dumps(config,indent=2,ensure_ascii=False))
+            if project.get('boundary'): z.writestr('study_boundary.geojson',json.dumps(project['boundary'],ensure_ascii=False))
+        st.download_button('Download analysis results',archive.getvalue(),'oasisinsight_results.zip','application/zip')
+    with st.expander('Method and scope'):
+        st.write(project['response_method'])
+        st.write('Counts describe uploaded observations, not land area. Persistent expansion must remain built through the end of the time window. RF, SHAP and governance are available in the Urumqi case study; this run computes trajectories and endpoint vegetation change.')
+    st.caption('Session project · Download results before leaving.')
 
+def project_workspace(project):
+    if 'result' in project:
+        result_workspace(project)
+        return
+    st.subheader(project['name'])
+    st.caption(f"{project['area']} · {project['start']}–{project['end']} · Prepared project")
+    st.info('Input validation and configuration are saved. Analysis engines are not connected in this release; no model results have been generated.')
+    for msg in project['audit']['warnings']: st.warning(msg)
+    st.dataframe(pd.DataFrame(project['audit']['modules']),hide_index=True,use_container_width=True)
+    a,b=st.columns(2)
+    a.metric('Input observations',project['audit']['rows'])
+    b.metric('Annual observations',project['end']-project['start']+1)
+    with st.expander('Configuration and validation record'):
+        st.json(project)
+    archive=io.BytesIO()
+    with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED) as z:
+        z.writestr('project_config.json',json.dumps(project,indent=2,ensure_ascii=False))
+        z.writestr('validation_fields.csv',pd.DataFrame(project['audit']['checks']).to_csv(index=False))
+        z.writestr('README.txt','Prepared input configuration only. No trajectory, model, SHAP or governance results have been computed. Raw uploaded data is not included. Re-upload it to resume in a later session.')
+    st.download_button('Export project setup',archive.getvalue(),'oasisinsight_project_setup.zip','application/zip')
+    st.caption('Projects and uploaded data are held in this browser session only. Download the setup before leaving. Refresh or server restart can clear the session.')
 
+header(context=None)
+nav=['Product','New Analysis','Projects','Urumqi Case Study','About']
+for col,label in zip(st.columns(5),nav):
+    col.button(label,key='nav_'+label,use_container_width=True,on_click=set_route,args=(label,))
+st.divider()
+if st.session_state.route in ['Urumqi Demo','Urumqi Case Study']:
+    st.caption('URUMQI CASE STUDY · 2016–2023 · Research workflow and precomputed results')
+    runpy.run_path(str(ROOT/'demo_workspace.py'))
+    st.stop()
+if st.session_state.route in ['Home','Product']:
+    st.title('Understand urban change. Inform ecological decisions.')
+    st.write('OasisInsight · AI-assisted ecological diagnosis for multi-year urban environments')
+    st.markdown('**Multi-year data → Trajectories → Spatial AI → Explanation → Diagnosis → Governance**')
+    for col,title,body in zip(st.columns(3),['Trajectory-aware Analysis','Trustworthy Spatial AI','Diagnosis to Governance'],['Identify persistent development and vegetation change across a flexible time window.','Explore spatial validation, model benchmarks and interpretable evidence in the Urumqi case.','Explore reproducible governance zoning backed by the Urumqi research workflow.']):
+        with col:
+            st.subheader(title); st.write(body)
+    a,b=st.columns(2)
+    if a.button('Start New Analysis',type='primary',use_container_width=True): navigate('New Analysis')
+    if b.button('Explore Urumqi Case',use_container_width=True): navigate('Urumqi Case Study')
+    st.caption('New analyses: trajectories, endpoint NDVI change and downloadable statistics. Full spatial AI evidence: Urumqi Case Study.')
+elif st.session_state.route=='Projects':
+    st.title('Projects')
+    if not st.session_state.projects:
+        st.info('Your projects will appear here. Start a new analysis to create one.')
+    for pid,project in st.session_state.projects.items():
+        with st.container(border=True):
+            st.write(f"**{project['name']}** · {project['area']} · {project['start']}–{project['end']}")
+            if st.button('Open project',key=pid):
+                st.session_state.current_project=pid
+                navigate('Project Workspace')
+    st.caption('Projects are available in this session. Export results to keep them.')
+elif st.session_state.route=='About':
+    st.title('Xinjiang University · Team OasisInsight')
+    st.write('Chunhui Li · Chao Guo · Xiaxuan Zhang')
+    about()
+    st.write('A reusable analytical framework for urban ecological research. Urumqi provides the completed research case.')
+    st.caption('SHAP explains predictive associations. Spatial block validation assesses transfer performance without guaranteeing independence.')
+elif st.session_state.route=='Project Workspace':
+    project_workspace(st.session_state.projects[st.session_state.current_project])
+else:
+    st.title('New Analysis')
+    st.caption('01 Study setup → 02 Upload & validate → 03 Configure → 04 Review & run')
+    st.subheader('01 · Study Setup')
+    a,b=st.columns(2)
+    name=a.text_input('Project name',key='project_name',max_chars=100)
+    area=b.text_input('Study area name',key='study_area',max_chars=100)
+    a,b,c=st.columns(3)
+    start=int(a.number_input('Start year',min_value=1900,max_value=2100,value=2018,step=1))
+    end=int(b.number_input('End year',min_value=1900,max_value=2100,value=2024,step=1))
+    c.metric('Annual observations',max(0,end-start+1))
+    crs=st.text_input('Coordinate reference system',placeholder='e.g. EPSG:4326 or a suitable local projected CRS')
+    st.caption('X = longitude/easting; Y = latitude/northing. Specify the actual data CRS. Spatial blocks need projected coordinates in metres.')
+    description=st.text_area('Project description (optional)',max_chars=1000)
+    valid_period=2<=end-start+1<=50
+    if not valid_period: st.error('Select 2–50 consecutive annual observations. This is a prototype input limit, not a statistical sufficiency claim.')
+    st.divider()
+    st.subheader('02 · Upload & Validate')
+    upload_panel=st.container(border=True)
+    with upload_panel:
+        st.write('Upload your study dataset')
+        upload=st.file_uploader('Standardized analysis data',type=['csv','parquet'])
+        boundary_upload=st.file_uploader('Study boundary (optional WGS84 GeoJSON)',type=['geojson','json'])
+        validation_panel=st.container()
+    st.caption('UTF-8 CSV / Parquet · up to 20 MB, 50,000 rows and 250 columns. Use Built = 0/1, NDVI in [-1, 1], and Slope in degrees. No automatic imputation.')
+    if valid_period:
+        st.download_button('Download input template',template(start,end),'input_template.csv','text/csv')
+        st.caption(f'Optional Built_{end+1} confirms terminal-year expansion only. Intermediate NDVI years may be omitted, but trend modules will be unavailable.')
+    with st.expander('Input semantics'):
+        st.write('One row is one spatial observation, with a unique ID. Full Built series and endpoint NDVI are required. NTLmean, NTLchg, PREmean, TEMmean, AImean, DEM and Slope are optional for basic analysis and required only for model input screening. Confirm units and period consistency before analysis.')
+        st.write('Point samples alone do not establish pixel areas or polygon boundaries. New projects will not inherit the Urumqi area totals or maps.')
+    st.divider()
+    st.subheader('03 · Analysis Configuration')
+    a,b=st.columns(2)
+    block=float(a.number_input('Spatial block size / km',min_value=0.1,max_value=1000.0,value=20.0,step=5.0))
+    b.metric('Planned spatial folds',5)
+    st.caption('20 km is a starting suggestion, not a universal optimum. Block separation without a buffer does not guarantee spatial independence.')
+    mode=st.selectbox('Vegetation response thresholds',['Auto','Custom'])
+    cutpoints=None
+    threshold_error=''
+    if mode=='Custom':
+        thresholds=st.text_input('Four ordered internal cutpoints for G1–G5',placeholder='Enter four comma-separated numbers appropriate for your study')
+        st.caption('Four internal cutpoints define five bins. Their ecological interpretation and the degraded/stable/improved grouping must be justified for the study; Urumqi thresholds are not global defaults.')
+        try:
+            cutpoints=[float(v.strip()) for v in thresholds.split(',')]
+            if len(cutpoints)!=4 or not all(-2<v<2 for v in cutpoints) or any(x>=y for x,y in zip(cutpoints,cutpoints[1:])): raise ValueError()
+        except ValueError: threshold_error='Enter four strictly increasing finite cutpoints inside (-2, 2).'
+        if threshold_error: st.warning(threshold_error)
+    else: st.caption('Auto: classify endpoint NDVI change as decrease, no change or increase using its sign. This is descriptive change, not a significance test.')
+    st.text_input('Analysis scope',value='Trajectory + dNDVI + statistics',disabled=True)
+    with st.expander('Advanced Options'):
+        st.caption('These analysis modules will become selectable when their engines are integrated.')
+        st.checkbox('Benchmark comparison',disabled=True)
+        st.checkbox('SHAP interpretation',disabled=True)
+        st.checkbox('Residual diagnostics',disabled=True)
+    audit=None
+    boundary_geo=None
+    boundary_audit=None
+    raw=None
+    with validation_panel:
+        if upload is None:
+            st.info('Choose a CSV or Parquet file to check fields, years and coordinates.')
+        elif not valid_period:
+            st.warning('Correct the study period before validation.')
+        else:
+            try:
+                raw=upload.getvalue()
+                frame=read_upload(raw,upload.name)
+                audit=validate(frame,start,end,crs,block)
+                if boundary_upload is not None and not audit['errors']:
+                    try:
+                        boundary_geo,boundary_audit=validate_boundary(boundary_upload.getvalue(),frame,crs)
+                        st.caption(f"Boundary alignment: {boundary_audit['points_inside']:,} observations inside, {boundary_audit['points_outside']:,} outside.")
+                        if boundary_audit['points_outside']: audit['errors'].append('Some observations lie outside the supplied boundary. Verify the boundary and point CRS before running.')
+                    except Exception as exc: audit['errors'].append('Boundary validation: '+str(exc))
+                st.write(f'File: {upload.name}')
+                a,b,c=st.columns(3)
+                a.metric('Rows',len(frame))
+                b.metric('Fields',len(frame.columns))
+                missing_count=int(frame.isna().sum().sum())
+                c.metric('Missing cells',f'{missing_count / max(1,frame.size):.2%}')
+                st.caption('Missing cells counts blank/NaN cells across the uploaded table; sentinel and invalid values are checked separately.')
+                st.subheader('Data Validation Summary')
+                summary=[]
+                for label,cols in [
+                    ('ID / coordinates',['ID','X','Y']),
+                    ('Built-up series',[f'Built_{y}' for y in range(start,end+1)]),
+                    ('Endpoint NDVI',[f'NDVI_{start}',f'NDVI_{end}']),
+                    ('Annual NDVI',[f'NDVI_{y}' for y in range(start,end+1)]),
+                    ('Predictors',['NTLmean','NTLchg','PREmean','TEMmean','AImean','DEM','Slope'])]:
+                    absent=[v for v in cols if v not in frame]
+                    summary.append({'Input':label,'Field coverage':'Complete' if not absent else 'Missing: '+', '.join(absent)})
+                st.dataframe(pd.DataFrame(summary),hide_index=True,use_container_width=True)
+                st.caption('Field coverage indicates column presence only. Value and CRS checks are reported below.')
+                for prefix in ['Built','NDVI']:
+                    years=sorted(int(str(col).split('_')[1]) for col in frame.columns if str(col).startswith(prefix+'_') and str(col).split('_')[1].isdigit())
+                    st.caption(f'{prefix} years detected: '+(', '.join(map(str,years)) or 'None'))
+                for msg in audit['errors']: st.error(msg)
+                for msg in audit['warnings']: st.warning(msg)
+                if not audit['errors']: st.success('Required fields, values and coordinate checks passed. Review warnings before saving.')
+                with st.expander('Data preview and field checks'):
+                    st.dataframe(frame.head(20),use_container_width=True,hide_index=True)
+                    st.dataframe(pd.DataFrame(audit['checks']),hide_index=True,use_container_width=True)
+                with st.expander('Analysis eligibility'):
+                    st.dataframe(pd.DataFrame(audit['modules']),hide_index=True,use_container_width=True)
+            except Exception as exc:
+                audit=None
+                st.error(f'Cannot validate file: {exc}')
+    st.divider()
+    st.subheader('04 · Review & Run')
+    st.dataframe(pd.DataFrame([{'Setting':'Project','Value':name or 'Not entered'},{'Setting':'Study area','Value':area or 'Not entered'},{'Setting':'Period','Value':f'{start}–{end}'},{'Setting':'CRS','Value':crs or 'Not entered'},{'Setting':'Input','Value':upload.name if upload else 'No file'},{'Setting':'Threshold method','Value':mode},{'Setting':'Analysis','Value':'Trajectory + dNDVI + statistics'}]),hide_index=True,use_container_width=True)
+    st.caption('This run produces trajectory and vegetation-change results. Spatial AI and governance evidence can be explored in the Urumqi case.')
+
+    reviewed=st.checkbox('I have reviewed the input units, CRS, validation warnings and study-specific thresholds.')
+    ready=bool(name.strip() and area.strip() and audit is not None and not audit['errors'] and not threshold_error and reviewed)
+    if st.button('Run Analysis',type='primary',disabled=not ready):
+        with st.status('Preparing project',expanded=True) as status:
+            st.write('Input checks completed.')
+            pid=uuid.uuid4().hex
+            project=dict(id=pid,name=name.strip(),area=area.strip(),start=start,end=end,crs=crs,description=description,created_at=datetime.now(timezone.utc).isoformat(),status='prepared',input_sha256=hashlib.sha256(raw).hexdigest(),config=dict(threshold_method=mode,cutpoints=cutpoints,spatial_block_km=block,folds=5,model='Random Forest',governance_rules='Study-specific mapping pending; no zones computed'),audit=audit)
+            st.write('Identifying trajectories and computing endpoint NDVI change...')
+            result,summary,method=analyze(frame,start,end,cutpoints)
+            project.update(result=result,summary=summary,response_method=method,status='complete_basic')
+            if boundary_geo is not None:
+                project.update(boundary=boundary_geo,boundary_audit=boundary_audit,boundary_sha256=hashlib.sha256(boundary_upload.getvalue()).hexdigest())
+            project['config']['model']='Not run; basic analysis'
+            st.session_state.projects[pid]=project
+            st.session_state.current_project=pid
+            st.write('Trajectory and vegetation statistics completed. Building project workspace.')
+            status.update(label='Basic analysis complete',state='complete',expanded=False)
+        navigate('Project Workspace')
+st.caption("OasisInsight · Xinjiang University")

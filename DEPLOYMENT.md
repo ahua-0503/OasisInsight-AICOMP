@@ -1,25 +1,9 @@
-# Deployment and updates
+# Competition release · 2026-10-05
 
-The user-provided repository is https://github.com/ahua-0503/OasisInsight-AICOMP. It was empty when checked. The local origin is already configured. After the initial commit, push from this directory:
+Streamlit Community Cloud: repository ahua-0503/OasisInsight-AICOMP, branch main, entry app.py, Python 3.12. Cloud installs requirements.txt.
 
-```powershell
-git push -u origin main
-```
+New uploads compute actual Built trajectories, endpoint NDVI differences, observation statistics and ZIP exports. Optional WGS84 GeoJSON boundaries are validated against every sample. Environmental predictors are required only for model screening. RF/SHAP/governance for uploaded projects are not connected; the Urumqi case retains completed research results.
 
-Complete GitHub authentication yourself; no credentials belong in files or chat.
+Kashgar 2017–2023 passed local real browser CSV/GeoJSON upload, independent full-row checks and actual ZIP download verification for 10,000 observations. Built_2024 confirms terminal expansion only. Source provenance was not independently established.
 
-In Streamlit Community Cloud, connect your GitHub account and choose:
-
-- Repository: ahua-0503/OasisInsight-AICOMP
-- Branch: main
-- Main file path: app.py
-- Advanced settings / Python: 3.12
-- Secrets: none
-- Preferred subdomain: oasisinsight; alternatives oasisinsight-aicomp or oasisinsight-xju (availability not checked)
-
-After deployment, test the actual URL while signed out, on desktop and phone: four tabs, layer and trajectory switching, four feature responses, evidence images, About, governance CSV download, and refresh. Record first-load time. Local tests are not Linux/cloud tests.
-
-For future updates, regenerate this deployment directory from the local source, review `git diff`, commit and push to main. Do not upload the parent research directory. Cloud tracks GitHub changes; ordinary app updates do not require a new application.
-
-Official instructions: https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy
-
+Projects remain in the browser session and may be lost on refresh or restart. Download results before leaving. Counts are observations, not areas. User uploads are excluded from Git. Stable backups are retained outside this repository.
